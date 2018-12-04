@@ -22,7 +22,7 @@ and could be viewed as a generalization of it.
 
 The CNXMD header is composed of a sequence of newline ('\n') terminated lines.
 The first line must be "CONNECTION_METADATA/1.1\n"
-What follows is zero or mnore key-value pairs formatted as "key=value\n"
+What follows is zero or more key-value pairs formatted as "key=value\n"
 All characters following the '=' character are interpreted as belonging to the value.
 The header is terminated with the blank line "\n"
 The specification does not define a maximum line length or number of lines.
