@@ -2,17 +2,9 @@ package cnxmd
 
 import (
 	"fmt"
-	"io"
+	"github.com/platform9/proxylib/pkg/proxylib"
 	"log"
 	"net"
-	"strings"
-	"time"
-)
-
-const (
-	ConnectionClosedErr = "use of closed network connection"
-	ConnectionResetErr  = "connection reset by peer"
-	MaxTeardownTimeInSeconds = 35
 )
 
 //------------------------------------------------------------------------------
@@ -83,55 +75,5 @@ func handleConnection(
 			cnxId, written, len(header))
 		return
 	}
-	Copycat(cnx.(*net.TCPConn), remoteCnx.(*net.TCPConn), cnxId)
-}
-
-//------------------------------------------------------------------------------
-
-func Copycat(client *net.TCPConn, server *net.TCPConn, cnxId string) {
-	log.Printf("[%s] Initiating copy between %s and %s", cnxId,
-		client.RemoteAddr().String(), server.RemoteAddr().String())
-
-	doCopy := func(s, c *net.TCPConn, cancel chan<- string) {
-		numWritten, err := io.Copy(s, c)
-		reason := "EOF"
-		if err != nil {
-			reason = err.Error()
-		}
-		log.Printf("[%s] Copied %d bytes from %s to %s, finished because: %s",
-			cnxId, numWritten, c.RemoteAddr().String(),
-			s.RemoteAddr().String(),
-			reason)
-		if err != nil && !strings.Contains(err.Error(),
-			ConnectionClosedErr) && !strings.Contains(err.Error(),
-				ConnectionResetErr) {
-			log.Printf("[%s] Failed copying connection data: %v",
-				cnxId, err)
-		}
-		log.Printf("[%s] Copy finished for %s -> %s", cnxId,
-			c.RemoteAddr().String(), s.RemoteAddr().String())
-		err = s.CloseWrite() // propagate EOF signal to destination
-		if err != nil {
-			log.Printf("[%s] warning: failed to CloseWrite() %s -> %s : %s --ok",
-				cnxId, c.RemoteAddr().String(), s.RemoteAddr().String(), err)
-		}
-		cancel <- c.RemoteAddr().String()
-	}
-
-	cancel := make(chan string, 2)
-	go doCopy(server, client, cancel)
-	go doCopy(client, server, cancel)
-
-	closedSrc := <- cancel
-	log.Printf("[%s] 1st source to close: %s", cnxId, closedSrc)
-	timer := time.NewTimer(MaxTeardownTimeInSeconds * time.Second)
-	select {
-	case closedSrc = <-cancel:
-		log.Printf("[%s] 2nd source to close: %s (all done)",
-			cnxId, closedSrc)
-		timer.Stop()
-	case <- timer.C:
-		log.Printf("[%s] timed out waiting for 2nd source to close",
-			cnxId)
-	}
+	proxylib.FerryBytes(cnx.(*net.TCPConn), remoteCnx.(*net.TCPConn), cnxId, 0)
 }
