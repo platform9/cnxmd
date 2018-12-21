@@ -30,10 +30,9 @@ func ServeClientProxy(
 		cnx, err := listener.Accept()
 		if err != nil {
 			log.Printf("warning: failed to accept: %s", err)
+			continue
 		}
-		cnxId := RandomString(8) 
-		log.Printf("[%s] accepted local connection", cnxId)
-		go handleConnection(cnx, cnxId, destFqdn, destPort, kv)
+		go handleConnection(cnx, destFqdn, destPort, kv)
 	}
 }
 
@@ -41,24 +40,20 @@ func ServeClientProxy(
 
 func handleConnection(
 	cnx net.Conn,
-	cnxId string,
 	destFqdn string,
 	destPort int,
 	kv map[string]string,
 ) {
+	cnxId := proxylib.RandomString(8)
+	defer proxylib.CloseConnection(cnx, cnxId, "inbound")
+	log.Printf("[%s] accepted local connection", cnxId)
 	dest := fmt.Sprintf("%s:%d", destFqdn, destPort)
 	remoteCnx, err := net.Dial("tcp", dest)
 	if err != nil {
 		log.Printf("[%s] failed to dial %s: %s", cnxId, dest, err)
 		return
 	}
-	defer func() {
-		err := remoteCnx.Close()
-		if err != nil {
-			log.Printf("[%s] failed to close remote connection: %s",
-				cnxId, err)
-		}
-	}()
+	defer proxylib.CloseConnection(cnx, cnxId, "outbound")
 	log.Printf("[%s] connected to %s", cnxId, dest)
 	header := HeadLine + "\n"
 	for key, value := range kv {
