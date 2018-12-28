@@ -5,7 +5,10 @@ import (
 	"github.com/platform9/proxylib/pkg/proxylib"
 	"log"
 	"net"
+	"os"
 )
+
+var logger = log.New(os.Stderr, "", log.LstdFlags)
 
 //------------------------------------------------------------------------------
 
@@ -23,13 +26,13 @@ func ServeClientProxy(
 	addr := fmt.Sprintf("%s:%d", bindAddr, listenPort)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatalf("failed to listen: %s", err)
+		logger.Fatalf("failed to listen: %s", err)
 	}
-	log.Printf("listening on %s", listener.Addr().String())
+	logger.Printf("listening on %s", listener.Addr().String())
 	for {
 		cnx, err := listener.Accept()
 		if err != nil {
-			log.Printf("warning: failed to accept: %s", err)
+			logger.Printf("warning: failed to accept: %s", err)
 			continue
 		}
 		go handleConnection(cnx, destFqdn, destPort, kv)
@@ -45,16 +48,16 @@ func handleConnection(
 	kv map[string]string,
 ) {
 	cnxId := proxylib.RandomString(8)
-	defer proxylib.CloseConnection(cnx, cnxId, "inbound")
-	log.Printf("[%s] accepted local connection", cnxId)
+	defer proxylib.CloseConnection(cnx, logger, cnxId, "inbound")
+	logger.Printf("[%s] accepted local connection", cnxId)
 	dest := fmt.Sprintf("%s:%d", destFqdn, destPort)
 	remoteCnx, err := net.Dial("tcp", dest)
 	if err != nil {
-		log.Printf("[%s] failed to dial %s: %s", cnxId, dest, err)
+		logger.Printf("[%s] failed to dial %s: %s", cnxId, dest, err)
 		return
 	}
-	defer proxylib.CloseConnection(cnx, cnxId, "outbound")
-	log.Printf("[%s] connected to %s", cnxId, dest)
+	defer proxylib.CloseConnection(cnx, logger, cnxId, "outbound")
+	logger.Printf("[%s] connected to %s", cnxId, dest)
 	header := HeadLine + "\n"
 	for key, value := range kv {
 		header = header + key + "=" + value + "\n"
@@ -62,11 +65,11 @@ func handleConnection(
 	header = header + "\n"
 	written, err := remoteCnx.Write([]byte(header))
 	if err != nil {
-		log.Printf("[%s] failed to write header: %s", cnxId, err)
+		logger.Printf("[%s] failed to write header: %s", cnxId, err)
 		return
 	}
 	if written != len(header) {
-		log.Printf("[%s] failed to write full header: only %d bytes instead of %d",
+		logger.Printf("[%s] failed to write full header: only %d bytes instead of %d",
 			cnxId, written, len(header))
 		return
 	}
